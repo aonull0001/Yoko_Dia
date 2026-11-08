@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.vs/
+*.log
+*.tsbuildinfo
+.env*
+!.env.example
+*.xlsx
+*.xls
+*.ytd
