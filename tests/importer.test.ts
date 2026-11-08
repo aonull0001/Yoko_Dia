@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import * as XLSX from '@e965/xlsx';
+import { calculateYokohamaSchedule } from '../src/engine';
 import { previewWorkbook } from '../src/importer';
 import { csvCell } from '../src/export';
 
@@ -88,6 +89,7 @@ describe('Excel preview and CSV export', () => {
     expect(preview.trains[0]).toMatchObject({ trainNumber: '1201A', serviceCode: 'A61', typeId: 6, originId: 6, destinationId: 1, direction: '下り' });
     expect(preview.trains[0].calls.find((call) => call.stationId === 4)).toMatchObject({ arrival: 43450, departure: 43450, stop: false });
     expect(preview.trains[0].calls.find((call) => call.stationId === 1)?.arrival).toBe(43840);
+    expect(calculateYokohamaSchedule({ originId: 6, destinationId: 1, typeId: 6, startTime: 43200, platforms: Object.fromEntries(preview.trains[0].calls.map((call) => [call.stationId, call.platform])) })).toEqual(preview.trains[0].calls);
     const down = await previewWorkbook(file, '下り');
     expect(down.trains).toHaveLength(0);
     expect(down.warnings.some((warning) => warning.includes('24列'))).toBe(true);

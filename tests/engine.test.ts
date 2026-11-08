@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateIntermediateTimes, checkConflicts, validateTrain } from '../src/engine';
+import { calculateIntermediateTimes, calculateYokohamaSchedule, checkConflicts, validateTrain } from '../src/engine';
 import { createTrain, parseTime, formatTime, serviceCode, stationsForDirection } from '../src/data';
 import { parseYtd } from '../src/storage';
 
@@ -19,6 +19,21 @@ describe('diagram domain rules', () => {
     const times = calculateIntermediateTimes([60, 90, 120, 60, 30], [0, 10, 10, 0, 5, 0], '下り');
     expect(times).toEqual([0, 60, 160, 290, 350, 385]);
     expect(() => calculateIntermediateTimes([-1, 1, 1, 1, 1], [0, 0, 0, 0, 0, 0], '下り')).toThrow();
+  });
+  it('matches the workbook running-time and stop patterns in both directions', () => {
+    const down = calculateYokohamaSchedule({ originId: 6, destinationId: 1, typeId: 6, startTime: 43200 });
+    expect(down.map((call) => [call.stationId, call.arrival, call.departure, call.stop])).toEqual([
+      [6, null, 43200, true], [5, 43295, 43325, true], [4, 43450, 43450, false],
+      [3, 43540, 43570, true], [2, 43690, 43690, false], [1, 43840, null, true],
+    ]);
+    const up = calculateYokohamaSchedule({ originId: 1, destinationId: 6, typeId: 6, startTime: 43200 });
+    expect(up.map((call) => [call.stationId, call.arrival, call.departure])).toEqual([
+      [1, null, 43200], [2, 43380, 43380], [3, 43470, 43500],
+      [4, 43620, 43620], [5, 43715, 43745], [6, 43840, null],
+    ]);
+    expect(calculateYokohamaSchedule({ originId: 6, destinationId: 1, typeId: 7, startTime: 43200 }).map((call) => call.stationId)).not.toContain(2);
+    expect(calculateYokohamaSchedule({ originId: 6, destinationId: 1, typeId: 8, startTime: 43200 }).map((call) => call.stationId)).not.toContain(3);
+    expect(() => calculateYokohamaSchedule({ originId: 6, destinationId: 3, typeId: 8, startTime: 43200 })).toThrow();
   });
   it('detects reversed times and possible platform overlap without claiming safety', () => {
     const first = createTrain();

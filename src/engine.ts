@@ -17,6 +17,80 @@ export function calculateIntermediateTimes(travelSeconds: number[], dwellSeconds
   return times;
 }
 
+export function calculateYokohamaSchedule(input: {
+  originId: number;
+  destinationId: number;
+  typeId: number;
+  startTime: number;
+  defaultDwellSeconds?: number;
+  dwellSecondsByStation?: Partial<Record<number, number>>;
+  averageStopSeconds?: number;
+  platforms?: Partial<Record<number, string>>;
+}): Train['calls'] {
+  const endpointIds = [1, 3, 5, 6];
+  if (![6, 7, 8].includes(input.typeId)) throw new Error('元Excelで定義された種別6〜8を指定してください。');
+  if (!endpointIds.includes(input.originId) || !endpointIds.includes(input.destinationId) || input.originId === input.destinationId) {
+    throw new Error('始発駅・終着駅は異なる番号付き駅を指定してください。');
+  }
+  if (!Number.isFinite(input.startTime) || input.startTime < 0) throw new Error('始発時刻は0以上の有限値で指定してください。');
+  const defaultDwell = input.defaultDwellSeconds ?? 30;
+  const averageStop = input.averageStopSeconds ?? 30;
+  if ([defaultDwell, averageStop, ...Object.values(input.dwellSecondsByStation ?? {})].some((value) => !Number.isFinite(value) || value! < 0)) {
+    throw new Error('停車時間は0以上の有限値で指定してください。');
+  }
+  if (input.typeId === 8 && (input.originId === 3 || input.destinationId === 3)) {
+    throw new Error('特別快速は元Excel規則で横浜ゲートウェイを始発・終着にできません。');
+  }
+  const direction = input.originId > input.destinationId ? '下り' : '上り';
+  const stationOrder = direction === '下り' ? [6, 5, 4, 3, 2, 1] : [1, 2, 3, 4, 5, 6];
+  const startIndex = stationOrder.indexOf(input.originId);
+  const endIndex = stationOrder.indexOf(input.destinationId);
+  if (startIndex < 0 || endIndex < 0 || startIndex >= endIndex) throw new Error('始発駅から終着駅への運転方向を判定できません。');
+  let route = stationOrder.slice(startIndex, endIndex + 1);
+  if (input.typeId === 7) route = route.filter((stationId) => stationId !== 2);
+  if (input.typeId === 8) route = route.filter((stationId) => stationId !== 2 && stationId !== 3);
+  const calls: Train['calls'] = [];
+  let time = input.startTime;
+  for (let index = 0; index < route.length; index += 1) {
+    const stationId = route[index];
+    const isOrigin = index === 0;
+    const isDestination = index === route.length - 1;
+    const stop = isOrigin || isDestination || (input.typeId === 8 ? stationId === 5 : stationId === 3 || stationId === 5);
+    const dwell = input.dwellSecondsByStation?.[stationId] ?? defaultDwell;
+    const departure = isOrigin || !stop ? time : time + dwell;
+    calls.push({
+      stationId,
+      arrival: isOrigin ? null : time,
+      departure: isDestination ? null : departure,
+      stop,
+      platform: input.platforms?.[stationId] ?? '',
+    });
+    if (!isDestination) time = departure + runningTime(route[index], route[index + 1], direction, input.typeId, averageStop);
+  }
+  return calls;
+}
+
+function runningTime(from: number, to: number, direction: Train['direction'], typeId: number, averageStop: number): number {
+  const pair = `${from}-${to}`;
+  if (typeId === 8) {
+    const times: Record<string, number> = direction === '下り'
+      ? { '6-5': 95, '5-4': 95 + averageStop, '4-1': 270 }
+      : { '1-4': 270 + averageStop, '4-5': 95, '5-6': 95 };
+    if (times[pair] !== undefined) return times[pair];
+  } else if (typeId === 7) {
+    const times: Record<string, number> = direction === '下り'
+      ? { '6-5': 95, '5-4': 95 + averageStop, '4-3': 90, '3-1': 220 }
+      : { '1-3': 220, '3-4': 90 + averageStop, '4-5': 95, '5-6': 95 };
+    if (times[pair] !== undefined) return times[pair];
+  } else {
+    const times: Record<string, number> = direction === '下り'
+      ? { '6-5': 95, '5-4': 95 + averageStop, '4-3': 90, '3-2': 90 + averageStop, '2-1': 150 }
+      : { '1-2': 150 + averageStop, '2-3': 90, '3-4': 90 + averageStop, '4-5': 95, '5-6': 95 };
+    if (times[pair] !== undefined) return times[pair];
+  }
+  throw new Error(`元Excelに対応する駅間計算がありません: ${from}→${to}`);
+}
+
 export function validateTrain(train: Train): Issue[] {
   const issues: Issue[] = [];
   const calls = [...train.calls].sort((a, b) => train.direction === '下り' ? a.stationId - b.stationId : b.stationId - a.stationId);
