@@ -11,7 +11,7 @@ npm test
 npm run build
 ```
 
-GitHub Pages向けのbase pathは `/Yoko_Dia/` です。`.github/workflows/deploy.yml` は `main` へのpush後にテスト・ビルド・Pages公開を実行します。公開にはリポジトリへのpush権限とGitHub Pages設定が必要です。
+GitHub Pagesの公開URLは https://aonull0001.github.io/Yoko_Dia/ です。base pathは `/Yoko_Dia/` で、`.github/workflows/deploy.yml` が `main` へのpush後にテスト・ビルドした成果物を公開します。GitHub PagesのBuild and deployment sourceはGitHub Actionsです。
 
 ## 操作
 
